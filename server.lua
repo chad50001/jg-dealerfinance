@@ -27,12 +27,13 @@ lib.callback.register('MakePayment', function(source, amount, paymenttype, vehic
     local newdata = vehicleData
     local finance_data = json.decode(newdata.finance_data)
     local dealershipID = finance_data.dealership_id
-    local dealership = Config.DealershipLocations[dealershipID]
 
     if not finance_data or not dealershipID then
         print("Invalid finance or dealership data")
         return false
     end
+
+    local dealership = MySQL.single.await("SELECT id, type FROM dealership_locations WHERE id = ?", {dealershipID})
 
     local identifier = Framework.Server.GetPlayerIdentifier(source)
     local plate = vehicleData.plate
@@ -48,7 +49,7 @@ lib.callback.register('MakePayment', function(source, amount, paymenttype, vehic
         local success, err = pcall(function()
             Framework.Server.PlayerRemoveMoney(source, amount, "bank")
             if dealership and dealership.type == "owned" then
-                MySQL.update.await("UPDATE dealership_data SET balance = balance + ? WHERE name = ?", {amount, dealershipID})
+                MySQL.update.await("UPDATE dealership_locations SET balance = balance + ? WHERE id = ?", {amount, dealershipID})
             end
 
             if finance_data.payments_complete >= finance_data.total_payments then
@@ -69,8 +70,9 @@ lib.callback.register('MakePayment', function(source, amount, paymenttype, vehic
         local success, err = pcall(function()
             Framework.Server.PlayerRemoveMoney(source, amount, "bank")
             if dealership and dealership.type == "owned" then
-                MySQL.update.await("UPDATE dealership_data SET balance = balance + ? WHERE name = ?", {amount, dealershipID})
+                MySQL.update.await("UPDATE dealership_locations SET balance = balance + ? WHERE id = ?", {amount, dealershipID})
             end
+            
             MySQL.update.await("UPDATE "..Framework.VehiclesTable.." SET finance_data = NULL, financed = 0 WHERE "..Framework.PlayerIdentifier.." = ? AND plate = ?", {identifier, plate})
             MySQL.update.await("UPDATE dealership_sales SET paid = paid + ?, owed = 0 WHERE plate = ? AND dealership = ?", {amount, plate, dealershipID})
         end)
